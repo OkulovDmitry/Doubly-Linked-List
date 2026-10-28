@@ -1,26 +1,102 @@
 #include "list.h"
 
+//============================= Проверка списка на валидность ============================
+#define LIST_CHECK(expr)                                                                 \
+    do {                                                                                 \
+        list_err_t _e = (expr);                                                          \
+        if (_e != LIST_OK)                                                               \
+        {                                                                                \
+            printf("%s:%d: %s -> error %d\n", __FILE__, __LINE__, #expr, _e);            \
+        }                                                                                \
+    } while (0)
+//========================================================================================
+
 int main()
 {
-    list_t first_list;
-    int initial_capacity = 13;
-    list_ctor(&first_list, initial_capacity);
+    list_t list;
+    LIST_CHECK(list_ctor(&list, 8));
+    LIST_CHECK(list_verify(&list));
 
-    list_elem_t* data = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90, -1, -1, -1};
+    int a = 0, b = 0, c = 0;
+    LIST_CHECK(list_elem_push(&list, 10, 0, &a));   // 10
+    LIST_CHECK(list_elem_push(&list, 20, a, &b));   // 10 20
+    LIST_CHECK(list_elem_push(&list, 15, a, &c));   // 10 15 20
+    LIST_CHECK(list_elem_push(&list, 5,  0, NULL)); // 5 10 15 20
+    // вот тут надо будет задампить
+    LIST_CHECK(list_verify(&list));
 
-    int* next = {0, 2, 3, 4, 5, 6, 7, 8, 9, -1, -1, -1, -1};
-    int tail = 1;
-    int head = 9;
-    int* prev = {0, 0, 1, 2, 3, 4, 5, 6, 7, 8, -1, -1, -1};
-    stack_t free;
-    stack_ctor(&free, 6);
-    stack_push(&free, 10);
-    stack_push(&free, 11);
-    stack_push(&free, 12);
+    LIST_CHECK(list_elem_pop(&list, c));
+    // снова дампим
+    LIST_CHECK(list_verify(&list));
+}
 
+list_err_t list_ctor(list_t* list, int initial_capacity)
+{
+    if (list == NULL)           return LIST_NULL_PTR;
+    if (initial_capacity  < 2)  return LIST_BAD_CAPACITY;
 
-    elem_add(data, next, &tail, &head, 35, 3);
+    list->data     = NULL;
+    list->next     = NULL;
+    list->prev     = NULL;
+    list->capacity = 0;
+    list->size     = 0;
 
+    list->data = (list_elem_t*)malloc((size_t)initial_capacity * sizeof(list_elem_t));
+    if (list->data == NULL) return LIST_DATA_OUT_OF_MEMORY;
+
+    list->next = malloc((size_t)initial_capacity * sizeof(int));
+    if (list->next == NULL)
+    {
+        free(list->data); list->data = NULL;
+        return LIST_NEXT_OUT_OF_MEMORY;
+    }
+
+    list->prev = malloc((size_t)initial_capacity * sizeof(int));
+    if (list->prev == NULL)
+    {
+        free(list->data); list->data = NULL;
+        free(list->next); list->next = NULL;
+        return LIST_PREV_OUT_OF_MEMORY;
+    }
+
+    err_t stack_err = stack_ctor(&list->free, (uint64_t)initial_capacity);
+    if (stack_err != STACK_OK)
+    {
+        free(list->data); list->data = NULL;
+        free(list->next); list->next = NULL;
+        free(list->prev); list->prev = NULL;
+        return LIST_FREE_FAIL;
+    }
+
+    // свободные ячейки
+    for (int i = 0; i < initial_capacity; i++)
+    {
+        list->next[i]  = -1;
+        list->prev[i]  = -1;
+        list->data[i]  = LIST_POISON;
+    }
+
+    // фиктивная ячейка 0
+    list->next[0] = 0;
+    list->prev[0] = 0;
+
+    // кладем адреса в обратном порядке
+    for (int i = initial_capacity - 1; i >= 1; i--)
+    {
+        if (stack_push(&list->free, (Elem_t)i) != STACK_OK)
+        {
+            stack_dtor(&list->free);
+            free(list->data); list->data = NULL;
+            free(list->next); list->next = NULL;
+            free(list->prev); list->prev = NULL;
+            return LIST_FREE_FAIL;
+        }
+    }
+
+    list->capacity = initial_capacity;
+    list->size = 0;
+
+    return LIST_OK;
 }
 
 list_err_t list_dtor(list_t* list)
@@ -38,131 +114,103 @@ list_err_t list_dtor(list_t* list)
     list->prev = NULL;
     list->capacity = 0;
     list->size     = 0;
-    free(list);
 
     return LIST_OK;
 }
 
-list_err_t list_ctor(list_t* list, int initial_capacity)
+list_err_t list_elem_push(list_t* list, list_elem_t elem, int after_that, int* out_index)
 {
-    list_elem_t* temp_data = malloc(initial_capacity * sizeof(list_elem_t));
-    if (temp_data == NULL) { free(list); return LIST_DATA_OUT_OF_MEMORY; }
-    list->data = temp_data;
+    if (list == NULL) return LIST_NULL_PTR;
 
-    int* temp_next    = malloc(initial_capacity * sizeof(int));
-    if (temp_next == NULL) { list_dtor(list); return LIST_NEXT_OUT_OF_MEMORY; }
-    list->next = temp_next;
-
-    int* temp_prev    = malloc(initial_capacity * sizeof(int));
-    if (temp_prev == NULL) { list_dtor(list); return LIST_PREV_OUT_OF_MEMORY; }
-    list->prev = temp_prev;
-
-    err_t stack_err = stack_ctor(list->free, initial_capacity);
-    if (stack_err != STACK_OK) { list_dtor(list); return LIST_FREE_FAIL; }
-
-    for (int i = 0; i < initial_capacity; i++)
+    if (after_that < 0 || after_that >= list->capacity || list->prev[after_that] == -1)
     {
-        list->next[i]  = -1;
-        list->prev[i]  = -1;
-        list->data[i]  = -1;
+        return LIST_BAD_INDEX;
     }
 
-    for (int i = 1; i < initial_capacity; i++)
-    {
-        err_t push_err = stack_push(&free, initial_capacity - i);
-        if (push_err != STACK_OK) { list_dtor(list); return LIST_FREE_FAIL; }
-    }
-
-    list->tail = 0;
-    list->head = 0;
-
-    return LIST_OK;
-}
-
-list_err_t list_elem_push(list_t* list, list_elem_t elem, int after_that)
-{
-    int free_addr = -1;
-    err_t pop_err = stack_pop(list->free, &free_addr);
-    if (pop_err != STACK_OK) { return LIST_ADD_TO_FULL_LIST; }
+    Elem_t tmp = 0;
+    err_t pop_err = stack_pop(&list->free, &tmp);
+    if (pop_err == STACK_UNDERFLOW) return LIST_ADD_TO_FULL_LIST;
+    if (pop_err != STACK_OK)        return LIST_FREE_FAIL;
+    int free_addr = (int)tmp;
 
     list->data[free_addr]  = elem;
 
-    list->next[free_addr]  = list->next[after_that];    // теперь после free_addr лежит next для after_that
-    list->prev[free_addr]  = after_that;                // теперь перед free_addr лежит after_that;
-    
-    if (list->next[free_addr] != 0)                     // если free_addr - не голова
-    {
-        list->prev[list->next[free_addr]] = free_addr; // теперь перед элементом, который лежал перед after_that лежит free_addr
-    }
-    else
-    {
-        list->head = free_addr;
-    }
+    int after_next = list->next[after_that];
+
+    list->next[free_addr]  = after_next;                // после новой ячейки - бывший next
+
+    list->prev[free_addr]  = after_that;                // теперь перед (новой ячейкой)free_addr лежит after_that;
+    list->prev[after_next] = free_addr;                 // перед бывшим next теперь новая ячейка
 
     list->next[after_that] = free_addr;                 // теперь после after_that лежит всавляемый элемент
+
+    list->size++;
+
+    if (out_index != NULL)  *out_index= free_addr;
 
     return LIST_OK;
 }
 
 list_err_t list_elem_pop(list_t* list, int that)
 {
+    if (list == NULL) return LIST_NULL_PTR;
+
+    if (that <= 0 || that >= list->capacity || list->prev[that] == -1) return LIST_POP_UNKNOWN_ELEM;
+
+    // сначала возвращаем ячейку в стек и если не получится - список не изменится
+    if (stack_push(&list->free, (Elem_t)that) != STACK_OK)             return LIST_FREE_FAIL;
+
     int next_elem = list->next[that];
     int prev_elem = list->prev[that];
 
-    if (that == 0 || prev_elem == -1 || next_elem == -1) { return LIST_POP_UNKNOWN_ELEM; }
-
-    if (prev_elem != -1)                                     // если that не хвост
-    {
-        list->next[prev_elem] = next_elem;  // теперь после элемента перед that лежит следующий для that   
-    }
-    else
-    {
-        list->head = list->next[that];
-    }
-
-    if (next_elem != -1)                                     // если that не голова
-    {
-        list->prev[next_elem] = prev_elem;   // теперь перед элементом после that лежит задний для that
-    }
-    else
-    {
-        list->tail = list->prev[that];
-    }
+    list->next[prev_elem] = next_elem;
+    list->prev[next_elem] = prev_elem;
 
     list->prev[that] = -1;
     list->next[that] = -1;
-    list->data[that] = -1;
+    list->data[that] = LIST_POISON;
 
-    err_t push_err = stack_push(&free, that);
-    if (push_err != LIST_OK) { return LIST_FREE_FAIL; }
+    list->size--;
 
     return LIST_OK;
-}
-
-list_err_t list_dump()
-{
-
 }
 
 list_err_t list_verify(const list_t* list)
 {
     if (list == NULL)        return LIST_NULL_PTR;
 
-    if (list->data == NULL || list->head == -1 || list->tail == -1)  return LIST_CORRYPTED;
+    if (list->data == NULL || list->next == NULL || list->prev == NULL)        return LIST_CORRYPTED;
 
-    // max_memory_on_list
+    if (list->capacity < 2 || list->size < 0 || list->size >= list->capacity)  return LIST_CORRYPTED;
 
-    int now_elem = list->tail;
-    for (int i = 0; i < MAX_DATA_SIZE; i++)
+    // обход по кольцу от ячейки 0
+    int cur   = 0;
+    int count = 0;
+
+    do
     {
-        if (list->next[now_elem] != -1 && (now_elem = list->next[now_elem]) == list->head)
-        {
-            if (list->next[now_elem] == 0)
-            {
-                return LIST_OK;
-            }
-        }
-    }
+        int nx = list->next[cur];
+        if (nx < 0 || nx >= list->capacity)  return LIST_CORRYPTED;
+        if (list->prev[nx] != cur)           return LIST_CORRYPTED;
 
-    return LIST_CORRYPTED;
+        cur = nx;
+        if (cur != 0)
+        {
+            count++;
+            if (count > list->size) return LIST_CORRYPTED; // зацикливание мимо 0
+        }
+
+    } while (cur != 0);
+
+    if (count != list->size) return LIST_CORRYPTED;
+
+    // проверка, что свободных ячеек ровно capacity - size - 1
+    if (stack_get_size(&list->free) != (size_t)(list->capacity - list->size - 1))  return LIST_CORRYPTED;
+
+    return LIST_OK;
+}
+
+list_err_t list_dump(const list_t* list, FILE* out)
+{
+
 }

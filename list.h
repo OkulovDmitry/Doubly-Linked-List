@@ -8,7 +8,7 @@
 
 typedef double        list_elem_t;
 #define LIST_ELEM_FMT "%f"
-#define ELEM_POISON   ((list_elem_t) - 1)   // значение в свободных ячейках
+#define LIST_POISON   ((list_elem_t) - 1)   // значение в свободных ячейках
 
 typedef enum 
 {
