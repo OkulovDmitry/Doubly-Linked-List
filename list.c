@@ -1,34 +1,19 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
 #include "list.h"
-
-typedef double list_elem_t
-
-typedef struct
-{
-    list_elem_t* data;
-    int* next;
-    int* prev;
-    my_stack_t* free;
-    int tail;
-    int head;
-} list_t;
 
 int main()
 {
     list_t first_list;
     int initial_capacity = 13;
-    list_ctor(&first_list, );
+    list_ctor(&first_list, initial_capacity);
 
-    list_elem_t* data = {0, 10, 20, 30, 40, 50, 60, 70 80, 90, -1, -1, -1};
+    list_elem_t* data = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90, -1, -1, -1};
 
     int* next = {0, 2, 3, 4, 5, 6, 7, 8, 9, -1, -1, -1, -1};
     int tail = 1;
     int head = 9;
     int* prev = {0, 0, 1, 2, 3, 4, 5, 6, 7, 8, -1, -1, -1};
-    my_stack_t free;
-    stack_ctor(&free, 6 STACK_PLACE_OUT);
+    stack_t free;
+    stack_ctor(&free, 6);
     stack_push(&free, 10);
     stack_push(&free, 11);
     stack_push(&free, 12);
@@ -40,16 +25,19 @@ int main()
 
 list_err_t list_dtor(list_t* list)
 {
-    free(data);
-    free(next);
-    free(prev);
-    free(free);
+    if (list == NULL)       return LIST_NULL_PTR;
+    if (list->data == NULL) return LIST_OK;         // или не создавался или уже dtor 
+
+    stack_dtor(&list->free);
+
+    free(list->data);
+    free(list->next);
+    free(list->prev);
     list->data = NULL;
     list->next = NULL;
     list->prev = NULL;
-    list->free = NULL;
-    tail = -1;
-    head = -1;
+    list->capacity = 0;
+    list->size     = 0;
     free(list);
 
     return LIST_OK;
@@ -65,7 +53,7 @@ list_err_t list_ctor(list_t* list, int initial_capacity)
     if (temp_next == NULL) { list_dtor(list); return LIST_NEXT_OUT_OF_MEMORY; }
     list->next = temp_next;
 
-    int* temp_prev    = malloc(initial_capacity) * sizeof(int);
+    int* temp_prev    = malloc(initial_capacity * sizeof(int));
     if (temp_prev == NULL) { list_dtor(list); return LIST_PREV_OUT_OF_MEMORY; }
     list->prev = temp_prev;
 
@@ -82,7 +70,7 @@ list_err_t list_ctor(list_t* list, int initial_capacity)
     for (int i = 1; i < initial_capacity; i++)
     {
         err_t push_err = stack_push(&free, initial_capacity - i);
-        if (push_err != STACK_OK) {free(data); free(next); free(prev); free(list); return LIST_FREE_FAIL; }
+        if (push_err != STACK_OK) { list_dtor(list); return LIST_FREE_FAIL; }
     }
 
     list->tail = 0;
@@ -116,7 +104,7 @@ list_err_t list_elem_push(list_t* list, list_elem_t elem, int after_that)
     return LIST_OK;
 }
 
-list_err_t list_elem_pop(list* list, int that)
+list_err_t list_elem_pop(list_t* list, int that)
 {
     int next_elem = list->next[that];
     int prev_elem = list->prev[that];
@@ -146,28 +134,28 @@ list_err_t list_elem_pop(list* list, int that)
     list->data[that] = -1;
 
     err_t push_err = stack_push(&free, that);
-    if (push_err != LIST_OK) { return LIST_FREE_FAIL; }list_err_t 
+    if (push_err != LIST_OK) { return LIST_FREE_FAIL; }
 
     return LIST_OK;
 }
 
-lisr_err_t list_dump()
+list_err_t list_dump()
 {
 
 }
 
-lisr_err_t list_verify(const list_t* list)
+list_err_t list_verify(const list_t* list)
 {
     if (list == NULL)        return LIST_NULL_PTR;
 
-    if (list->data == NULL || head == -1 || tail == -1)  return LIST_CORRYPTED;
+    if (list->data == NULL || list->head == -1 || list->tail == -1)  return LIST_CORRYPTED;
 
     // max_memory_on_list
 
     int now_elem = list->tail;
     for (int i = 0; i < MAX_DATA_SIZE; i++)
     {
-        if (list->next[now_elem] != -1 && (now_elem = list->next[now_elem]) == head)
+        if (list->next[now_elem] != -1 && (now_elem = list->next[now_elem]) == list->head)
         {
             if (list->next[now_elem] == 0)
             {
