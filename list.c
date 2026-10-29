@@ -22,12 +22,18 @@ int main()
     LIST_CHECK(list_elem_push(&list, 20, a, &b));   // 10 20
     LIST_CHECK(list_elem_push(&list, 15, a, &c));   // 10 15 20
     LIST_CHECK(list_elem_push(&list, 5,  0, NULL)); // 5 10 15 20
-    // вот тут надо будет задампить
+
+    FILE* list_dumps = fopen("list_dumps.txt", "w");
+    list_dump(&list, list_dumps);
+
     LIST_CHECK(list_verify(&list));
 
     LIST_CHECK(list_elem_pop(&list, c));
-    // снова дампим
+    list_dump(&list, list_dumps);
     LIST_CHECK(list_verify(&list));
+
+    fclose(list_dumps);
+    return 0;
 }
 
 list_err_t list_ctor(list_t* list, int initial_capacity)
@@ -212,5 +218,40 @@ list_err_t list_verify(const list_t* list)
 
 list_err_t list_dump(const list_t* list, FILE* out)
 {
+    if (list == NULL || out == NULL)  return LIST_NULL_PTR;
+    if (list->data == NULL || list->next == NULL || list->prev == NULL)
+    {
+        fprintf(out, "I TIRED, THINK LATER");
+        return LIST_CORRYPTED;
+    }
 
+    fprintf(out, LIST_SEP);
+
+    fprintf(out, "list [%p]: size = %d, capacity = %d\n", (const void*)list, list->size, list->capacity);
+
+    fprintf(out, "  idx : ");
+    for (int i = 0; i < list->capacity; i++) fprintf(out, "%6d ", i);
+
+    fprintf(out, "\n  data: ");
+    for (int i = 0; i < list->capacity; i++) fprintf(out, "%6.1f ", list->data[i]);
+
+    fprintf(out, "\n  next: ");
+    for (int i = 0; i < list->capacity; i++) fprintf(out, "%6d ", list->next[i]);
+    fprintf(out, "\n  prev: ");
+    for (int i = 0; i < list->capacity; i++) fprintf(out, "%6d ", list->prev[i]);
+    fprintf(out, "\n");
+
+    // логический порядок элементов
+    fprintf(out, "  order:");
+    int cur = list->next[0];
+    for (int steps = 0; steps < list->capacity && cur > 0 && cur < list->capacity; steps++)
+    {
+        fprintf(out, " " LIST_ELEM_FMT "(%d)", list->data[cur], cur);
+        cur = list->next[cur];
+    }
+
+    fprintf(out, "\n");
+    fprintf(out, LIST_SEP);
+
+    return LIST_OK;
 }
