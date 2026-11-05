@@ -17,21 +17,28 @@ int main()
     LIST_CHECK(list_ctor(&list, 8));
     LIST_CHECK(list_verify(&list));
 
-    int a = 0, b = 0, c = 0;
-    LIST_CHECK(list_elem_push(&list, 10, 0, &a));   // 10
-    LIST_CHECK(list_elem_push(&list, 20, a, &b));   // 10 20
-    LIST_CHECK(list_elem_push(&list, 15, a, &c));   // 10 15 20
-    LIST_CHECK(list_elem_push(&list, 5,  0, NULL)); // 5 10 15 20
-
+    int a = 0, b = 0, c = 0, d = 0;
+    LIST_CHECK(list_elem_push(&list, 10, 1, &a));   // 10
+    LIST_CHECK(list_elem_push(&list, 20, 2, &b));   // 10 20
+    LIST_CHECK(list_elem_push(&list, 15, 2, &c));   // 10 15 20
+    LIST_CHECK(list_elem_push(&list, 5,  1, NULL)); // 5 10 15 20
 
     FILE* list_dumps = fopen("list_dumps.txt", "w");
-    list_dump(&list, list_dumps);
-
+    if (list_dumps == NULL) return 1;
+    list_dump(&list, list_dumps);                   // order: 5(4) 10(1) 15(3) 20(2)
     LIST_CHECK(list_verify(&list));
 
-    list_dump(&list, list_dumps);
+    LIST_CHECK(list_elem_pop(&list, 2));            // 5 15 20  (убрали 10, ячейка 1 свободна)
+    list_dump(&list, list_dumps);                   // order: 5(4) 15(3) 20(2), free_addr = 1
     LIST_CHECK(list_verify(&list));
 
+    LIST_CHECK(list_elem_push(&list, 99, 4, &d));   // 5 15 20 99, d должен быть 1 (переиспользовали ячейку)
+    if (d != 1) printf("expected reuse of cell 1, got %d\n", d);
+    if (list_elem_push(&list, 7, 0, NULL) != LIST_BAD_INDEX) printf("push(0) must fail\n");
+    list_dump(&list, list_dumps);                   // order: 5(4) 15(3) 20(2) 99(1)
+    LIST_CHECK(list_verify(&list));
+
+    LIST_CHECK(list_dtor(&list));
     fclose(list_dumps);
     return 0;
 }
@@ -81,6 +88,7 @@ list_err_t list_ctor(list_t* list, int initial_capacity)
         list->prev[i] = - 1;
         list->data[i] = LIST_POISON;
     }
+    list->next[initial_capacity - 1] = 0;  // без этого последняя указывает за грницу списка
     /*for (int i = 0; i < initial_capacity; i++)
     {
         list->next[i]  = -1;
@@ -139,7 +147,7 @@ list_err_t list_elem_push(list_t* list, list_elem_t elem, int that, int* out_ind
 {
     if (list == NULL) return LIST_NULL_PTR;
 
-    if (that < 0 || that >= list->size + 2)
+    if (that < 1 || that >= list->size + 2)
     {
         return LIST_BAD_INDEX;
     }
@@ -148,35 +156,32 @@ list_err_t list_elem_push(list_t* list, list_elem_t elem, int that, int* out_ind
     err_t pop_err = stack_pop(&list->free, &tmp);
     if (pop_err == STACK_UNDERFLOW) return LIST_ADD_TO_FULL_LIST;
     if (pop_err != STACK_OK)        return LIST_FREE_FAIL;*/
-    // замена свободного элемента на следующий элемент за свободным, если след за ним несвободен - список заполнен полностью
     if (list->free_addr == 0)       return LIST_ADD_TO_FULL_LIST;
-    int free_addr_cpy = list->free_addr;
-    list->free_addr = (list->data[list->next[free_addr_cpy]] != LIST_POISON) 
-                      ?  list->next[free_addr_cpy]
-                      : 0;
 
-    // теперь пользователь вводит не виртуальный номер, а реальный и мы для поиска пробегаемся начиная с tail до нужного элемента
+    // теперь пользователь вводит не виртуальный номер, а логический и мы для поиска пробегаемся начиная с tail до элемента перед текущим
 
     // случай добавления в пустой список
     int cur_elem = 0;
-    if (list->next[cur_elem] == 0) { list->next[0] = cur_elem;
-                                     list->prev[0] = cur_elem;}
-    for (int i = 0; i < that; i++)
+    for (int i = 0; i < that - 1; i++)
     {
         if (list->data[list->next[cur_elem]] == LIST_POISON)  return LIST_BAD_INDEX;
         cur_elem = list->next[cur_elem];
     }
 
+    // замена свободного элемента на следующий элемент за свободным, если след за ним несвободен - список заполнен полностью
+    int free_addr_cpy = list->free_addr;
+    list->free_addr   = list->next[free_addr_cpy];
+
     list->data[free_addr_cpy] = elem; 
 
-    int after_that = list->next[cur_elem];
-    int prev_that  = list->prev[cur_elem];
+    int after = list->next[cur_elem];        // перед этим нужно вставить элемент
 
-    list->next[free_addr_cpy]  = after_that;                // после новой ячейки - бывший next для cur_elem
-    list->prev[free_addr_cpy]  = prev_that;                 // теперь перед (новой ячейкой)free_addr лежит prev для cur_elem;
+    list->data[free_addr_cpy] = elem;        // включение свободного в двусвязный
+    list->next[free_addr_cpy] = after;
+    list->prev[free_addr_cpy] = cur_elem;
 
-    list->prev[after_that] = free_addr_cpy;                 // перед бывщим следующим для cur_elem теперь free_addr
-    list->next[that]       = free_addr_cpy;                 // теперь после that лежит вставляемый элемент
+    list->prev[after]    = free_addr_cpy;    // теперь список знает о новом элементе
+    list->next[cur_elem] = free_addr_cpy;
 
     list->size++;
 
@@ -189,15 +194,15 @@ list_err_t list_elem_pop(list_t* list, int that)
 {
     if (list == NULL) return LIST_NULL_PTR;
 
-    if (that <= 0 || that > list->size) return LIST_POP_UNKNOWN_ELEM;
-
     if (list->prev[0] == 0)  return LIST_UNDERFLOW;
+
+    if (that <= 0 || that > list->size) return LIST_POP_UNKNOWN_ELEM;
 
     int cur_elem = 0;
 
     for (int i = 0; i < that; i++)
     {
-        if (list->data[list->next[cur_elem]] == LIST_POISON)  return LIST_BAD_INDEX;
+        if (list->next[cur_elem] == 0) return LIST_BAD_INDEX;
         cur_elem = list->next[cur_elem];
     }
 
@@ -253,14 +258,22 @@ list_err_t list_verify(const list_t* list)
     if (count != list->size) return LIST_CORRYPTED;
 
     // теперь вместо проверки на размер стека - нужно пробежаться по списку с free начиная с free_addr и проверить размер в конце
-    int cur_num_of_free = 0;
+    int free_count = 0;
     int cur_free = list->free_addr;
 
-    for (cur_num_of_free; list->next[cur_free] != LIST_POISON; cur_num_of_free++)
-        cur_free = list->data[list->next[cur_free]];
+    while(cur_free != 0)
+    {
+        if (cur_free < 0 || cur_free >= list->capacity)  return LIST_CORRYPTED;
+        if (list->prev[cur_free] != -1)                  return LIST_CORRYPTED;
+
+        free_count++;
+        if (free_count > list->capacity)                 return LIST_CORRYPTED;
+
+        cur_free = list->next[cur_free];
+    }
 
     // проверка, что свободных ячеек ровно capacity - size - 1
-    if (cur_num_of_free != (size_t)(list->capacity - list->size - 1))  return LIST_CORRYPTED;
+    if (free_count != list->capacity - list->size - 1)   return LIST_CORRYPTED;
     //if (stack_get_size(&list->free) != (size_t)(list->capacity - list->size - 1))  return LIST_CORRYPTED;
 
     return LIST_OK;
