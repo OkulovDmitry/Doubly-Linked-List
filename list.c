@@ -282,56 +282,78 @@ list_err_t list_dump(const list_t* list, FILE* out)
 
 list_err_t list_dump_graph(const list_t* list, const char* dot_name, const char* png_name)
 {
-    if (list == NULL || dot_name == NULL || png_name == NULL) return LIST_NULL_PTR;
+    if (list == NULL || dot_name == NULL || png_name == NULL)           return LIST_NULL_PTR;
     if (list->data == NULL || list->next == NULL || list->prev == NULL) return LIST_CORRYPTED;
 
     FILE* out = fopen(dot_name, "w");
     if (out == NULL) return LIST_NULL_PTR;
 
+    // ============================ заголовок =========================
     fprintf(out, "digraph list {\n");
-    fprintf(out, "  rankdir=LR;\n");
-    fprintf(out, "  node [shape=record, style=\"rounded,filled\"];\n");
-    fprintf(out, "  edge [arrowsize=0.7];\n");
-    fprintf(out, "  nodesep=0.5;\n");
-    fprintf(out, "  ranksep=0.9;\n");
+    fprintf(out, "  graph [dpi=100, bgcolor=\"#2F353B\", splines=ortho, nodesep=0.6, ranksep=1.2];\n");
+    fprintf(out, "  node  [shape=rectangle, style=\"rounded,filled\", fillcolor=\"#C5D0E6\","
+                 " color=\"#C5D0E6\", fontsize=20, width=1.6, height=2.0, fixedsize=true, penwidth=3];\n");
+    fprintf(out, "  edge  [penwidth=2, arrowsize=1.0];\n");
 
+    // ============================== ячейки ==========================
     for (int i = 0; i < list->capacity; i++)
     {
-        const char* color = "lightblue";                    // занятая
-        if (i == 0) color = "lightgrey";                    // фиктивная
-        else if (list->prev[i] == -1) color = "lightgreen"; // свободная
-
-        fprintf(out, " cell%d [fillcolor=\"%s\", label=\"idx %d | data " LIST_ELEM_FMT " | <nx> next %d | <pv> prev %d\"];\n",
-                           i,              color,            i,         list->data[i],              list->next[i], list->prev[i]);
+        if (i == 0)   // header - фиктивная ячейка и free_addr
+        {
+            fprintf(out, "  cell0 [color=red, label=\"header\\n\\nhead: %d\\ntail: %d\\nfree: %d\"];\n",
+                    list->next[0], list->prev[0], list->free_addr);
+        }
+        else
+        {
+            fprintf(out, "  cell%d [label=\"idx: %d\\n\\n" LIST_ELEM_FMT "\\nnxt: %d\\nprv: %d\"];\n",
+                    i, i, list->data[i], list->next[i], list->prev[i]);
+        }
     }
 
-    // заставляет dot ставить ячейки слева направо по номерам
+    // =========== все ячейки в один ряд, в физическом порядке ================
+    fprintf(out, "  { rank=same;");
+    for (int i = 0; i < list->capacity; i++) fprintf(out, " cell%d;", i);
+    fprintf(out, " }\n");
+
     for (int i = 0; i + 1 < list->capacity; i++)
-    fprintf(out, "  cell%d -> cell%d [style=invis, weight=100];\n", i, i + 1);
+        fprintf(out, "  cell%d -> cell%d [style=invis, weight=100];\n", i, i + 1);
 
+    // ============================== стрелки ==================================
     for (int i = 0; i < list->capacity; i++)
     {
-        if (list->prev[i] != -1)   // фиктивная или занятая
+        int nx = list->next[i];
+        int pv = list->prev[i];
+
+        if (pv == -1)                                    // свободная ячейка - белая цепочка
         {
-            fprintf(out, "  cell%d:nx -> cell%d [color=blue, constraint=false];\n", i, list->next[i]);
-            fprintf(out, "  cell%d:pv -> cell%d [color=red,  constraint=false];\n", i, list->prev[i]);
+            if (nx >= 0 && nx < list->capacity && nx != i)
+                fprintf(out, "  cell%d -> cell%d [color=white];\n", i, nx);
+            continue;
         }
-        else if (list->next[i] != 0) // свободная: next ведет к следующей свободной
+
+        // next (зелёная; красная, если сосед не ссылается обратно)
+        if (nx >= 0 && nx < list->capacity && nx != i)
         {
-            fprintf(out, " cell%d:nx -> cell%d [color=darkgreen, style=dashed, constraint=false];\n",
-                               i,            list->next[i]);
+            if (list->prev[nx] == i) fprintf(out, "  cell%d -> cell%d [color=\"#00FF00\"];\n", i, nx);
+            else                     fprintf(out, "  cell%d -> cell%d [color=red, penwidth=4];\n", i, nx);
+        }
+
+        // prev (оранжевая и красная, если сосед не ссылается вперёд)
+        if (pv >= 0 && pv < list->capacity && pv != i)
+        {
+            if (list->next[pv] == i) fprintf(out, "  cell%d -> cell%d [color=orange];\n", i, pv);
+            else                     fprintf(out, "  cell%d -> cell%d [color=red, penwidth=4];\n", i, pv);
         }
     }
 
-    if (list->free_addr != 0)
-    {
-        fprintf(out, "  FREE [shape=plaintext, style=\"\", label=\"free_addr\"];\n");
-        fprintf(out, "  FREE -> cell%d [color=darkgreen];\n", list->free_addr);
-    }
+    // ====================== указатель на первую свободную ========================
+    if (list->free_addr > 0 && list->free_addr < list->capacity)
+        fprintf(out, "  cell0 -> cell%d [color=white, penwidth=3];\n", list->free_addr);
 
     fprintf(out, "}\n");
     fclose(out);
 
+    // ================================ запуск dot ===================================
     char cmd[256] = {};
     snprintf(cmd, sizeof(cmd), "dot -Tpng %s -o %s", dot_name, png_name);
     if (system(cmd) != 0) return LIST_CORRYPTED;
