@@ -68,12 +68,28 @@ typedef struct
     int size;      //  количество несвободных ячеек (без фиктивной)
 } list_t;
 
+typedef struct 
+{
+    int idx;
+} list_iter_t;
+
+/* ---- создание и удаление ---- */
 list_err_t list_ctor(list_t* list, int initial_capacity);
 list_err_t list_dtor(list_t* list);
+
+/* ---- итераторы за O(1) ---- */
+list_iter_t list_begin(const list_t* list);
+list_iter_t list_end(const list_t* list);
+list_iter_t list_next(const list_t* list, list_iter_t it);
+list_iter_t list_prev(const list_t* list, list_iter_t it);
+int list_iter_eq(list_iter_t a, list_iter_t b);
+list_elem_t list_get(const list_t* list, list_iter_t it);
 
 list_err_t list_elem_push(list_t* list, list_elem_t elem, int that, int* out_index);
 list_err_t list_elem_pop(list_t* list, int that);
 
+
+/* ---- отладка ---- */
 list_err_t list_verify(const list_t* list);
 list_err_t list_dump(const list_t* list, FILE* out);
 

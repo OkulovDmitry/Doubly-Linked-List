@@ -10,41 +10,6 @@
     } while (0)
 //========================================================================================
 
-int main() {
-    list_t list;
-    LIST_CHECK(list_ctor(&list, 8));
-    LIST_CHECK(list_verify(&list));
-
-    int a = 0, b = 0, c = 0, d = 0;
-    LIST_CHECK(list_elem_push(&list, 10, 1, &a));   // 10
-    LIST_CHECK(list_elem_push(&list, 20, 2, &b));   // 10 20
-    LIST_CHECK(list_elem_push(&list, 15, 2, &c));   // 10 15 20
-    LIST_CHECK(list_elem_push(&list, 5, 1, NULL));  // 5 10 15 20
-
-    FILE* list_dumps = fopen("list_dumps.txt", "w");
-    if (list_dumps == NULL) return 1;
-    list_dump(&list, list_dumps);  // order: 5(4) 10(1) 15(3) 20(2)
-    list_dump_graph_both(&list, "dump1");
-    LIST_CHECK(list_verify(&list));
-
-    LIST_CHECK(list_elem_pop(&list, 2));  // 5 15 20  (убрали 10, ячейка 1 свободна)
-    list_dump(&list, list_dumps);         // order: 5(4) 15(3) 20(2), free_addr = 1
-    list_dump_graph_both(&list, "dump2");
-    LIST_CHECK(list_verify(&list));
-
-    LIST_CHECK(list_elem_push(&list, 99, 4, &d));  // 5 15 20 99, d должен быть 1 (переиспользовали ячейку)
-    if (d != 1) printf("expected reuse of cell 1, got %d\n", d);
-    if (list_elem_push(&list, 7, 0, NULL) != LIST_BAD_INDEX) printf("push(0) must fail\n");
-    list_dump(&list, list_dumps);  // order: 5(4) 15(3) 20(2) 99(1)
-    list_dump_graph_both(&list, "dump3");
-    LIST_CHECK(list_verify(&list));
-
-    LIST_CHECK(list_dtor(&list));
-    fclose(list_dumps);
-
-    return 0;
-}
-
 list_err_t list_ctor(list_t* list, int initial_capacity) {
     if (list == NULL) return LIST_NULL_PTR;
     if (initial_capacity < 2) return LIST_BAD_CAPACITY;
@@ -112,6 +77,43 @@ list_err_t list_dtor(list_t* list) {
     list->size     = 0;
 
     return LIST_OK;
+}
+
+const int iter_ok(const list_t* list, list_iter_t it) {
+    return it.idx >= 0 && it.idx < list->capacity && (it.idx = 0 || list->prev[it.idx] != -1);
+}
+
+list_iter_t list_begin(const list_t* list) {
+    assert(list != NULL);
+    return (list_iter_t){list->next[0]};
+}
+
+list_iter_t list_end(const list_t* list) {
+    assert(list != NULL);
+    return (list_iter_t){0};
+}
+
+list_iter_t list_next(const list_t* list, list_iter_t it) {
+    assert(list != NULL);
+    assert(iter_ok(list, it) && it.idx != 0);
+    return (list_iter_t){list->next[it.idx]};
+}
+
+list_iter_t list_prev(const list_t* list, list_iter_t it) {
+    assert(list != NULL);
+    assert(iter_ok(list, it));
+    return (list_iter_t){list->prev[it.idx]};
+}
+
+int list_iter_eq(list_iter_t a, list_iter_t b) {
+    return a.idx == b.idx;
+}
+
+list_elem_t list_get(const list_t* list, list_iter_t it) {
+    assert(list != NULL);
+    assert(iter_ok(list, it) && it.idx != 0);
+
+    return list->data[it.idx];
 }
 
 list_err_t list_elem_push(list_t* list, list_elem_t elem, int that, int* out_index) {
