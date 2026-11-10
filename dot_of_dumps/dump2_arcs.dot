@@ -1,0 +1,34 @@
+digraph list {
+  graph [dpi=100, bgcolor="#1B1F24", splines=true, pad=0.5, nodesep=1.6, ranksep=1.5];
+  node  [shape=rectangle, style="rounded,filled", fontcolor="#E6EDF3", fontsize=16, width=1.8, height=1.7, fixedsize=true, penwidth=3];
+  edge  [penwidth=2, arrowsize=1.0];
+  cell0 [fillcolor="#5e4592", color="#B392F0", label="header\n\nhead: 4\ntail: 2\nfree: 1"];
+  cell1 [fillcolor="#2B3036", color="#6E7681", style="rounded,filled,dashed", label="idx: 1\n\n-1.000000\nnxt: 5\nprv: -1"];
+  cell2 [fillcolor="#2F5D8A", color="#6CA6E0", label="idx: 2 [TAIL]\n\n20.000000\nnxt: 0\nprv: 3"];
+  cell3 [fillcolor="#2F5D8A", color="#6CA6E0", label="idx: 3\n\n15.000000\nnxt: 2\nprv: 4"];
+  cell4 [fillcolor="#2F5D8A", color="#6CA6E0", label="idx: 4 [HEAD]\n\n5.000000\nnxt: 3\nprv: 0"];
+  cell5 [fillcolor="#2B3036", color="#6E7681", style="rounded,filled,dashed", label="idx: 5\n\n-1.000000\nnxt: 6\nprv: -1"];
+  cell6 [fillcolor="#2B3036", color="#6E7681", style="rounded,filled,dashed", label="idx: 6\n\n-1.000000\nnxt: 7\nprv: -1"];
+  cell7 [fillcolor="#2B3036", color="#6E7681", style="rounded,filled,dashed", label="idx: 7\n\n-1.000000\nnxt: 0\nprv: -1"];
+  { rank=same; cell0; cell1; cell2; cell3; cell4; cell5; cell6; cell7; }
+  cell0 -> cell1 [style=invis, weight=100];
+  cell1 -> cell2 [style=invis, weight=100];
+  cell2 -> cell3 [style=invis, weight=100];
+  cell3 -> cell4 [style=invis, weight=100];
+  cell4 -> cell5 [style=invis, weight=100];
+  cell5 -> cell6 [style=invis, weight=100];
+  cell6 -> cell7 [style=invis, weight=100];
+  cell0:n -> cell4:n [color="#3FB950"];
+  cell0:s -> cell2:s [color="#F0883E"];
+  cell1:s -> cell5:s [color="#8B949E", style=dashed];
+  cell2:n -> cell0:n [color="#3FB950"];
+  cell2:s -> cell3:s [color="#F0883E"];
+  cell3:n -> cell2:n [color="#3FB950"];
+  cell3:s -> cell4:s [color="#F0883E"];
+  cell4:n -> cell3:n [color="#3FB950"];
+  cell4:s -> cell0:s [color="#F0883E"];
+  cell5:s -> cell6:s [color="#8B949E", style=dashed];
+  cell6:s -> cell7:s [color="#8B949E", style=dashed];
+  cell7:s -> cell0:s [color="#8B949E", style=dashed];
+  cell0:s -> cell1:s [color="#D29922", penwidth=3, style=bold];
+}
