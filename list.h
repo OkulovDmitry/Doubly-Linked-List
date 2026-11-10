@@ -1,32 +1,48 @@
 #ifndef LIST_H
 #define LIST_H
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 //#include "stack.h"
 
-typedef double        list_elem_t;
+typedef double list_elem_t;
 #define LIST_ELEM_FMT "%f"
-#define LIST_POISON   ((list_elem_t) - 1)   // значение в свободных ячейках
+#define LIST_POISON ((list_elem_t) - 1)  // значение в свободных ячейках
 
 #define LIST_SEP "#######################################################################################\n"
 
-typedef enum 
-{
+#define GV_BG           "#1B1F24"   // фон
+#define GV_TEXT         "#E6EDF3"   // текст
+#define GV_USED_FILL    "#2F5D8A"   // занятая ячейка
+#define GV_USED_BORDER  "#6CA6E0"
+#define GV_FREE_FILL    "#2B3036"   // свободная ячейка
+#define GV_FREE_BORDER  "#6E7681"
+#define GV_HDR_FILL     "#5e4592"   // ячейка 0
+#define GV_HDR_BORDER   "#B392F0"
+#define GV_NEXT         "#3FB950"   // next
+#define GV_PREV         "#F0883E"   // prev
+#define GV_FREE_CHAIN   "#8B949E"   // цепочка свободных
+#define GV_FREE_PTR     "#D29922"   // указатель free
+#define GV_BAD          "#F85149"   // рассогласование
+
+typedef enum { GV_ARCS, GV_ORTHO } gv_mode_t;
+
+
+typedef enum {
     LIST_OK                 = 0,
     LIST_NULL_PTR           = 1,
     LIST_OUT_OF_MEMORY      = 2,
     LIST_DATA_OUT_OF_MEMORY = 3,
     LIST_NEXT_OUT_OF_MEMORY = 4,
     LIST_PREV_OUT_OF_MEMORY = 5,
-    //LIST_FREE_FAIL          = 6,
     LIST_ADD_TO_FULL_LIST   = 6,
     LIST_POP_UNKNOWN_ELEM   = 7,
     LIST_CORRYPTED          = 8,
     LIST_BAD_INDEX          = 9,
     LIST_BAD_CAPACITY       = 10,
     LIST_UNDERFLOW          = 11,
+    LIST_IO_ERROR           = 12,
 } list_err_t;
 
 /*
@@ -44,12 +60,12 @@ typedef enum
 typedef struct
 {
     list_elem_t* data;
-    int*         next;
-    int*         prev;
-    int          free_addr;
+    int* next;
+    int* prev;
+    int free_addr;
     //stack_t      free;
-    int          capacity;   //  вместе с фиктивной ячейкой
-    int          size;       //  количество несвободных ячеек (без фиктивной)
+    int capacity;  //  вместе с фиктивной ячейкой
+    int size;      //  количество несвободных ячеек (без фиктивной)
 } list_t;
 
 list_err_t list_ctor(list_t* list, int initial_capacity);
@@ -61,6 +77,7 @@ list_err_t list_elem_pop(list_t* list, int that);
 list_err_t list_verify(const list_t* list);
 list_err_t list_dump(const list_t* list, FILE* out);
 
-list_err_t list_dump_graph(const list_t* list, const char* dot_name, const char* png_name);
+list_err_t list_dump_graph(const list_t* list, const char* dot_name, const char* png_name, gv_mode_t mode);
+list_err_t list_dump_graph_both(const list_t* list, const char* base_name);
 
-#endif //LIST_H
+#endif  //LIST_H
