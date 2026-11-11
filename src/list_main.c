@@ -43,5 +43,7 @@ int main() {
     LIST_CHECK(list_dtor(&list));
     fclose(list_dumps);
 
+    system(start "log.html");
+
     return 0;
 }
