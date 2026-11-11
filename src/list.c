@@ -362,9 +362,25 @@ static void gv_edge(FILE* o, gv_mode_t mode, int from, const char* fport, int to
 list_err_t list_dump_graph(const list_t* list, const char* dot_name, const char* png_name, gv_mode_t mode) {
     if (list == NULL || dot_name == NULL || png_name == NULL) return LIST_NULL_PTR;
     if (list->data == NULL || list->next == NULL || list->prev == NULL) return LIST_CORRYPTED;
+    static int dump_id = 0;
 
     FILE* out = fopen(dot_name, "w");
     if (out == NULL) return LIST_IO_ERROR;
+
+    if (dump_id == 0) {
+        FILE* log_file = fopen("log.html", "w");
+        if (log_file == NULL) return LIST_IO_ERROR;
+        fprintf(log_file, "<html><head><title>List Dump Log</title></head><body>\n");
+        fclose(log_file);
+    }
+
+    dump_id++;
+
+    FILE* log_file = fopen("log.html", "a");
+    fprintf(log_file, "<hr>\n"); // разделительная линия
+    fprintf("<h2> DUMP %d</h2>\n", dump_id);  // в будущем добавить макрос на еще откуда он вызван
+    // и еще не 1 2 3 ... дампы а 1.1 1.2 2.1 ...
+    fprintf(log_file, "<p>Size: %d, Capacity: %d</p>\n");
 
     // ============================ заголовок =========================
     fprintf(out, "digraph list {\n");
@@ -454,6 +470,8 @@ list_err_t list_dump_graph(const list_t* list, const char* dot_name, const char*
     snprintf(cmd, sizeof(cmd), "dot -Tpng \"%s\" -o \"%s\"", dot_name, png_name);
     if (system(cmd) != 0) return LIST_CORRYPTED;
 
+    fprintf(log_file, "<img src=\"%s\" alt=\"List State\"><br>\n", png_name);
+    fclose(log_file);
     return LIST_OK;
 }
 
