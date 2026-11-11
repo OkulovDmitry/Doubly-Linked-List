@@ -88,6 +88,8 @@ list_err_t list_elem_pop(list_t* list, int that);
 list_err_t list_verify(const list_t* list);
 list_err_t list_dump(const list_t* list, FILE* out);
 
+void log_init();
+
 list_err_t list_dump_graph(const list_t* list, const char* dot_name, const char* png_name, gv_mode_t mode);
 list_err_t list_dump_graph_both(const list_t* list, const char* base_name);
 

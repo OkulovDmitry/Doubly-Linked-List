@@ -354,6 +354,84 @@ if (list->prev[nx] == i) зелёная  else красная, penwidth=4
  - если нет то стрелка красная и толстая
  Для prev то же самое в обратную - оранжевая или красная
 */
+
+void log_init() {
+    FILE* log = fopen("log.html", "w");
+    if (!log) return;
+
+    /* 1 строка - говорит браузеру чт осейчас будет современный HTML5 и его нужно читать по актуальным правилам
+       meta - это для текста на русском
+       4 строка - задает текст, который будет написан на самой вкладке в браузере рядом с иконкой
+       далее в стайле задается правила внешнего вида для тегов:
+           выбираем тег боди и пишем условия: цвета окружения текста отступы и прочее
+           далее следующий тег - натсройка внешнего вида главного заголовка страницы и самой карточки дампа
+           и следующий тег - натсройка дампа самой картинки
+           и далее настройка текста внутри карточки  - где и почему вызван дамп, таблички с переменными окраска и прочее
+           и завершающий блок - чтобы картинка не ломала верстку и читалась на темном фоне
+       */
+
+    fprintf(log,
+        "<!DOCTYPE html>\n"
+        "<html>\n<head>\n"
+        " <meta charset=\"UTF-8\">\n"
+        " <title>List Lifecycle Log</title>\n"
+        "<style>\n"
+        "   body {\n"
+        "       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;\n"
+        "       background-color: #1e1e1e;\n"
+        "       color: #d4d4d4;\n"
+        "       padding: 30px;\n"
+        "       margin: 0;\n"
+        "   }\n"
+        "   h1 {\n"
+        "       color: #ffffff;\n"
+        "       border-bottom: 2px solid #3c3c3c;\n"
+        "       padding-bottom: 10px;\n"
+        "   }\n"
+        "   .dump-card {\n"
+        "       background-color: #252526;\n"
+        "       border: 1px solid #3c3c3c;\n"
+        "       border-left: 5px solid #569cd6;\n"
+        "       border-radius: 6px;\n"
+        "       padding: 20px;\n"
+        "       margin-bottom: 25px;\n"
+        "       box-shadow: 0 4px 6px rgba(0,0,0,0.3);\n"
+        "   }\n"
+        "   .meta {\n"
+        "       font-size: 0.95em;\n"
+        "       color: #85c1e9;\n"
+        "       margin-bottom: 10px;\n"
+        "   }\n"
+        "   .meta-func { color: #dcdcaa; font-weight: bold; }\n"
+        "   .meta-file { color: #ce9178; }\n"
+        "   .stats-table {\n"
+        "       border-collapse: collapse;\n"
+        "       margin: 10px;\n"
+        "   }\n"
+        "   .stats-table td {\n"
+        "       padding: 4px 15px 4px 0;\n"
+        "   }\n"
+        "   .var-name { color: #9cdcfe; font-weight: bold; }\n"
+        "   .var-val { color: #b5cea8; }\n"
+        "   .graph-container {\n"
+        "       background-color: #ffffff;\n"
+        "       padding: 15px;\n"
+        "       border-radius: 4px;\n"
+        "       margin-top: 15px;\n"
+        "       display: inline-block;\n"
+        "       max-width: 100%%;\n"
+        "       overflow-x: auto;\n"
+        "   }\n"
+        "   img {\n"
+        "       max-height: 600px;\n"
+        "       display: block;\n"
+        "   }\n"
+        "</style>\n"
+        "</head>\n<body>\n<h1>List Execution History</h1>\n"
+    );
+    fclose(log);
+}
+
 static void gv_edge(FILE* o, gv_mode_t mode, int from, const char* fport, int to, const char* tport,
                     const char* color, const char* attrs) {
     const char* sep = attrs[0] ? ", " : "";
@@ -372,20 +450,13 @@ list_err_t list_dump_graph(const list_t* list, const char* dot_name, const char*
     FILE* out = fopen(dot_name, "w");
     if (out == NULL) return LIST_IO_ERROR;
 
-    if (dump_id == 0) {
-        FILE* log_file = fopen("log.html", "w");
-        if (log_file == NULL) return LIST_IO_ERROR;
-        fprintf(log_file, "<html><head><title>List Dump Log</title></head><body>\n");
-        fclose(log_file);
-    }
-
     dump_id++;
 
     FILE* log_file = fopen("log.html", "a");
     fprintf(log_file, "<hr>\n"); // разделительная линия
-    fprintf("<h2> DUMP %d</h2>\n", dump_id);  // в будущем добавить макрос на еще откуда он вызван
+    fprintf(log_file, "<h2> DUMP %d</h2>\n", dump_id);  // в будущем добавить макрос на еще откуда он вызван
     // и еще не 1 2 3 ... дампы а 1.1 1.2 2.1 ...
-    fprintf(log_file, "<p>Size: %d, Capacity: %d</p>\n");
+    fprintf(log_file, "<p>Size: %d, Capacity: %d</p>\n", list->size, list->capacity);
 
     // ============================ заголовок =========================
     fprintf(out, "digraph list {\n");
@@ -483,8 +554,11 @@ list_err_t list_dump_graph(const list_t* list, const char* dot_name, const char*
     // ================================ запуск dot ===================================
     char cmd[512] = {0};
     snprintf(cmd, sizeof(cmd), "dot -Tpng \"%s\" -o \"%s\"", dot_name, png_name);
-    if (system(cmd) != 0) return LIST_CORRYPTED;
-
+    if (system(cmd) != 0) {
+        fprintf(log_file, "<img src=\"%s\" alt=\"List corrypted\"><br>\n", png_name);
+        fclose(log_file);
+        return LIST_CORRYPTED;
+    }
     fprintf(log_file, "<img src=\"%s\" alt=\"List State\"><br>\n", png_name);
     fclose(log_file);
     return LIST_OK;

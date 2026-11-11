@@ -11,6 +11,8 @@
 //========================================================================================
 
 int main() {
+    log_init();
+
     list_t list;
     LIST_CHECK(list_ctor(&list, 8));
     LIST_CHECK(list_verify(&list));
@@ -43,7 +45,7 @@ int main() {
     LIST_CHECK(list_dtor(&list));
     fclose(list_dumps);
 
-    system(start "log.html");
+    system("start log.html");
 
     return 0;
 }
