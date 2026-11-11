@@ -9,12 +9,11 @@
 
 typedef double list_elem_t;
 #define LIST_ELEM_FMT "%f"
-#define LIST_POISON ((list_elem_t) - 1)  // значение в свободных ячейках
+#define LIST_POISON ((list_elem_t)0xDEADBEEF)  // значение в свободных ячейках
 
 #define LIST_SEP "#######################################################################################\n"
 
 typedef enum { GV_ARCS, GV_ORTHO } gv_mode_t;
-
 
 typedef enum {
     LIST_OK                 = 0,

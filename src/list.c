@@ -279,7 +279,12 @@ list_err_t list_dump(const list_t* list, FILE* out) {
     for (int i = 0; i < list->capacity; i++) fprintf(out, "%6d ", i);
 
     fprintf(out, "\n  data: ");
-    for (int i = 0; i < list->capacity; i++) fprintf(out, "%6.1f ", list->data[i]);
+    for (int i = 0; i < list->capacity; i++) {
+        if (list->data[i] == LIST_POISON)
+            fprintf(out, "POISON ");
+        else
+            fprintf(out, "%6.1f ", list->data[i]);
+    }
 
     fprintf(out, "\n  next: ");
     for (int i = 0; i < list->capacity; i++) fprintf(out, "%6d ", list->next[i]);
@@ -399,12 +404,22 @@ list_err_t list_dump_graph(const list_t* list, const char* dot_name, const char*
                                                 : "";
         }
 
-        fprintf(out, "  cell%d [fillcolor=\"%s\", color=\"%s\"%s, label=\"idx: %d%s\\n\\n" LIST_ELEM_FMT "\\nnxt: %d\\nprv: %d\"];\n",
-                i,
-                is_free ? GV_FREE_FILL : GV_USED_FILL,
-                is_free ? GV_FREE_BORDER : GV_USED_BORDER,
-                is_free ? ", style=\"rounded,filled,dashed\"" : "",
-                i, tag, list->data[i], list->next[i], list->prev[i]);
+        if (list->data[i] != LIST_POISON) {
+            fprintf(out, "  cell%d [fillcolor=\"%s\", color=\"%s\"%s, label=\"idx: %d%s\\n\\n" LIST_ELEM_FMT "\\nnxt: %d\\nprv: %d\"];\n",
+                    i,
+                    is_free ? GV_FREE_FILL : GV_USED_FILL,
+                    is_free ? GV_FREE_BORDER : GV_USED_BORDER,
+                    is_free ? ", style=\"rounded,filled,dashed\"" : "",
+                    i, tag, list->data[i], list->next[i], list->prev[i]);
+        }
+        else {
+            fprintf(out, "  cell%d [fillcolor=\"%s\", color=\"%s\"%s, label=\"idx: %d%s\\n\\n%s\\nnxt: %d\\nprv: %d\"];\n",
+                    i,
+                    is_free ? GV_FREE_FILL : GV_USED_FILL,
+                    is_free ? GV_FREE_BORDER : GV_USED_BORDER,
+                    is_free ? ", style=\"rounded,filled,dashed\"" : "",
+                    i, tag, "POISON", list->next[i], list->prev[i]);
+        }
     }
 
     // =========== все ячейки в один ряд, в физическом порядке ================

@@ -23,6 +23,7 @@ int main() {
 
     FILE* list_dumps = fopen("list_dumps.txt", "w");
     if (list_dumps == NULL) return 1;
+    //list.prev[1] = -123;
     list_dump(&list, list_dumps);  // order: 5(4) 10(1) 15(3) 20(2)
     list_dump_graph_both(&list, "dump1");
     LIST_CHECK(list_verify(&list));
