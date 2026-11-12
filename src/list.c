@@ -15,9 +15,78 @@
 #define GV_FREE_PTR "#D29922"    // указатель free
 #define GV_BAD "#F85149"         // рассогласование
 
-list_err_t list_ctor(list_t* list, int initial_capacity) {
+#ifdef LIST_ABORT_ON_CORRUPT
+#    define LIST_ABORT() abort()
+#else
+#    define LIST_ABORT() ((void)0)
+#endif
+
+#ifdef LIST_DEBUG
+#    define LIST_VERIFY_OR_RETURN(l)                                   \
+        do {                                                           \
+            list_err_t _v = list_verify(l);                            \
+            if (LIST_IS_ERROR(_v)) {                                   \
+                list_dump_html((l), _v, __func__, __FILE__, __LINE__); \
+                system("start chrome \"%CD%\\log.html\"");             \
+                LIST_ABORT();                                          \
+                return _v;                                             \
+            }                                                          \
+        } while (0)
+#else
+#    define LIST_VERIFY_OR_RETURN(l) ((void)0)
+#endif
+
+const char* list_strerror(list_err_t err) {
+    switch (err) {
+        case LIST_OK:
+            return "ok";
+        case LIST_NULL_PTR:
+            return "null pointer";
+        case LIST_BAD_CAPACITY:
+            return "bad capacity (need >= 2)";
+        case LIST_ADD_TO_FULL_LIST:
+            return "insert into full list";
+        case LIST_BAD_INDEX:
+            return "bad index";
+        case LIST_UNDERFLOW:
+            return "pop from empty list";
+        case LIST_POP_UNKNOWN_ELEM:
+            return "element to pop not found";
+        case LIST_IO_ERROR:
+            return "io error";
+        case LIST_DATA_OUT_OF_MEMORY:
+            return "out of memory (data)";
+        case LIST_NEXT_OUT_OF_MEMORY:
+            return "out of memory (next)";
+        case LIST_PREV_OUT_OF_MEMORY:
+            return "out of memory (prev)";
+        case LIST_CORRYPTED:
+            return "list corrupted (arrays/capacity/size)";
+        case LIST_NEXT_BROKEN:
+            return "next/prev links inconsistent";
+        case LIST_SIZE_MISMATCH:
+            return "ring length != size";
+        case LIST_FREE_CHAIN_BROKEN:
+            return "free chain broken";
+        default:
+            return "unknown error";
+    }
+}
+
+void list_perror(const char* prefix, list_err_t err) {
+    fprintf(stderr, "%s: [%d] %s\n", prefix, err, list_strerror(err));
+}
+
+list_err_t list_ctor(list_t* list, int initial_capacity LIST_PLACE_IN) {
     if (list == NULL) return LIST_NULL_PTR;
     if (initial_capacity < 2) return LIST_BAD_CAPACITY;
+
+#ifdef LIST_DEBUG
+    list->name     = name;
+    list->function = function;
+    list->file     = file;
+    list->line     = line;
+#endif
 
     list->data     = NULL;
     list->next     = NULL;
@@ -69,6 +138,8 @@ list_err_t list_ctor(list_t* list, int initial_capacity) {
 list_err_t list_dtor(list_t* list) {
     if (list == NULL) return LIST_NULL_PTR;
     if (list->data == NULL) return LIST_OK;  // или не создавался или уже dtor
+
+    //LIST_VERIFY_OR_RETURN(list);
 
     list->free_addr = 0;
 
@@ -124,6 +195,7 @@ list_elem_t list_get(const list_t* list, list_iter_t it) {
 // вставка после it. вставка после end - вставка в начало
 list_err_t list_insert_after(list_t* list, list_iter_t it, list_elem_t elem, list_iter_t* out) {
     if (list == NULL) return LIST_NULL_PTR;
+    LIST_VERIFY_OR_RETURN(list);
     assert(iter_ok(list, it));
     if (list->free_addr == 0) return LIST_ADD_TO_FULL_LIST;
 
@@ -141,6 +213,7 @@ list_err_t list_insert_after(list_t* list, list_iter_t it, list_elem_t elem, lis
 
     list->size++;
     if (out != NULL) out->idx = fresh;
+    LIST_VERIFY_OR_RETURN(list);
     return LIST_OK;
 }
 
@@ -153,6 +226,7 @@ list_err_t list_insert_before(list_t* list, list_iter_t it, list_elem_t elem, li
 
 list_err_t list_erase(list_t* list, list_iter_t it, list_iter_t* out_next) {
     if (list == NULL) return LIST_NULL_PTR;
+    LIST_VERIFY_OR_RETURN(list);
     assert(iter_ok(list, it) && it.idx != 0);
 
     int pv = list->prev[it.idx];
@@ -168,6 +242,7 @@ list_err_t list_erase(list_t* list, list_iter_t it, list_iter_t* out_next) {
 
     list->size--;
     if (out_next != NULL) out_next->idx = nx;
+    LIST_VERIFY_OR_RETURN(list);
     return LIST_OK;
 }
 
@@ -183,6 +258,7 @@ list_err_t list_push_back(list_t* list, list_elem_t elem, list_iter_t* out) {
 
 list_err_t list_nth(const list_t* list, int that, list_iter_t* out) {
     if (list == NULL || out == NULL) return LIST_NULL_PTR;
+    LIST_VERIFY_OR_RETURN(list);
     if (that < 1 || that > list->size) return LIST_BAD_INDEX;
 
     list_iter_t it = list_begin(list);
@@ -233,43 +309,71 @@ list_err_t list_verify(const list_t* list) {
 
     do {
         int nx = list->next[cur];
-        if (nx < 0 || nx >= list->capacity) return LIST_CORRYPTED;
-        if (list->prev[nx] != cur) return LIST_CORRYPTED;
+        if (nx < 0 || nx >= list->capacity) return LIST_NEXT_BROKEN;
+        if (list->prev[nx] != cur) return LIST_NEXT_BROKEN;
 
         cur = nx;
         if (cur != 0) {
             count++;
-            if (count > list->size) return LIST_CORRYPTED;  // зацикливание мимо 0
+            if (count > list->size) return LIST_SIZE_MISMATCH;  // зацикливание мимо 0
         }
 
     } while (cur != 0);
 
-    if (count != list->size) return LIST_CORRYPTED;
+    if (count != list->size) return LIST_SIZE_MISMATCH;
 
     // теперь вместо проверки на размер стека - нужно пробежаться по списку с free начиная с free_addr и проверить размер в конце
     int free_count = 0;
     int cur_free   = list->free_addr;
 
     while (cur_free != 0) {
-        if (cur_free < 0 || cur_free >= list->capacity) return LIST_CORRYPTED;
-        if (list->prev[cur_free] != -1) return LIST_CORRYPTED;
+        if (cur_free < 0 || cur_free >= list->capacity) return LIST_FREE_CHAIN_BROKEN;
+        if (list->prev[cur_free] != -1) return LIST_FREE_CHAIN_BROKEN;
 
         free_count++;
-        if (free_count > list->capacity) return LIST_CORRYPTED;
+        if (free_count > list->capacity) return LIST_FREE_CHAIN_BROKEN;
 
         cur_free = list->next[cur_free];
     }
 
     // проверка, что свободных ячеек ровно capacity - size - 1
-    if (free_count != list->capacity - list->size - 1) return LIST_CORRYPTED;
+    if (free_count != list->capacity - list->size - 1) return LIST_FREE_CHAIN_BROKEN;
     return LIST_OK;
+}
+
+void list_dump_html(const list_t* list, list_err_t err,
+                    const char* func, const char* file, int line) {
+    static int id = 0;
+    id++;
+
+    list_perror("LIST ERROR", err);
+    fprintf(stderr, "  failed in %s (%s:%d)\n", func, file, line);
+
+    FILE* log = fopen("log.html", "a");
+    if (log) {
+        fprintf(log,
+                "<div class=\"error\"><b>ERROR %d: %s</b><br>"
+                "failed in <code>%s()</code> (%s:%d)",
+                err, list_strerror(err), func, file, line);
+#ifdef LIST_DEBUG
+        fprintf(log, "<br>list <code>%s</code> created in <code>%s()</code> (%s:%d)",
+                list->name, list->function, list->file, list->line);
+#endif
+        fprintf(log, "</div>\n");
+        fclose(log);
+    }
+
+    list_dump(list, stderr);
+
+    char buf[64];
+    snprintf(buf, sizeof(buf), "error%d", id);
+    list_dump_graph_both(list, buf);
 }
 
 list_err_t list_dump(const list_t* list, FILE* out) {
     if (list == NULL || out == NULL) return LIST_NULL_PTR;
     if (list->data == NULL || list->next == NULL || list->prev == NULL) {
-        fprintf(out, "I TIRED, THINK LATER");
-        return LIST_CORRYPTED;
+        return LIST_NULL_PTR;
     }
 
     fprintf(out, LIST_SEP);
@@ -379,20 +483,20 @@ void log_init() {
             "<style>\n"
             "   body {\n"
             "       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;\n"
-            "       background-color: #1e1e1e;\n"
-            "       color: #d4d4d4;\n"
+            "       background-color: #13161A;\n"
+            "       color: #C9D1D9;\n"
             "       padding: 30px;\n"
             "       margin: 0;\n"
             "   }\n"
             "   h1 {\n"
-            "       color: #ffffff;\n"
-            "       border-bottom: 2px solid #3c3c3c;\n"
+            "       color: #F0F6FC;\n"
+            "       border-bottom: 2px solid #30363D;\n"
             "       padding-bottom: 10px;\n"
             "   }\n"
             "   .dump-card {\n"
-            "       background-color: #252526;\n"
-            "       border: 1px solid #3c3c3c;\n"
-            "       border-left: 5px solid #569cd6;\n"
+            "       background-color: #1E232A;\n"
+            "       border: 1px solid #30363D;\n"
+            "       border-left: 5px solid #58A6FF;\n"
             "       border-radius: 6px;\n"
             "       padding: 20px;\n"
             "       margin-bottom: 25px;\n"
@@ -414,21 +518,77 @@ void log_init() {
             "   }\n"
             "   .var-name { color: #9cdcfe; font-weight: bold; }\n"
             "   .var-val { color: #b5cea8; }\n"
-            "   .graph-container {\n"
-            "       background-color: #ffffff;\n"
-            "       padding: 15px;\n"
-            "       border-radius: 4px;\n"
-            "       margin-top: 15px;\n"
-            "       display: inline-block;\n"
-            "       max-width: 100%%;\n"
-            "       overflow-x: auto;\n"
-            "   }\n"
-            "   img {\n"
-            "       max-height: 600px;\n"
-            "       display: block;\n"
+            "    .graph-container {\n"
+            "        background-color: #1B1F24;\n"
+            "        border: 1px solid #30363D;\n"
+            "        padding: 15px;\n"
+            "        border-radius: 4px;\n"
+            "        margin-top: 15px;\n"
+            "        display: inline-block;\n"
+            "        max-width: 100%%;\n"
+            "        overflow-x: auto;\n"
+            "    }\n"
+            "    img {\n"
+            "        max-height: 600px;\n"
+            "        display: block;\n"
+            "    }\n"
+            "       /* темный скроллбар */\n"
+            "       ::-webkit-scrollbar {\n"
+            "           width: 10px;\n"
+            "           height: 10px;\n"
+            "       }\n"
+            "       ::-webkit-scrollbar-track {\n"
+            "           background: #16191E;\n"
+            "           border-radius: 4px;\n"
+            "       }\n"
+            "       ::-webkit-scrollbar-thumb {\n"
+            "           background: #38414D;\n"
+            "           border-radius: 4px;\n"
+            "       }\n"
+            "       ::-webkit-scrollbar-thumb:hover {\n"
+            "           background: #555555;\n"
+            "    }\n"
+            "    .error {\n"
+            "        background-color: #3a1d1d;\n"
+            "        border-left: 5px solid #f85149;\n"
+            "        color: #ffb4ae;\n"
+            "        padding: 10px 15px;\n"
+            "        margin: 15px 0;\n"
+            "        border-radius: 4px;\n"
             "   }\n"
             "</style>\n"
             "</head>\n<body>\n<h1>List Execution History</h1>\n");
+    fclose(log);
+}
+
+static void html_escape(FILE* f, const char* s) {
+    for (; *s; s++) {
+        switch (*s) {
+            case '&':
+                fputs("&amp;", f);
+                break;
+            case '<':
+                fputs("&lt;", f);
+                break;
+            case '>':
+                fputs("&gt;", f);
+                break;
+            default:
+                fputc(*s, f);
+        }
+    }
+}
+
+void log_error(const char* file, int line, const char* expr, list_err_t err) {
+    printf("%s:%d: %s -> error %d (%s)\n", file, line, expr, err, list_strerror(err));
+
+    FILE* log = fopen("log.html", "a");
+    if (!log) return;
+
+    fprintf(log, "<div class=\"error\"><b>ERROR %d: %s</b><br>%s:%d: <code>",
+            err, list_strerror(err), file, line);
+    html_escape(log, expr);  // в expr бывает & и <, их надо экранировать
+    fprintf(log, "</code></div>\n");
     fclose(log);
 }
 
@@ -459,7 +619,9 @@ list_err_t list_dump_graph(const list_t* list, const char* dot_name, const char*
     FILE* out = fopen(dot_name, "w");
     if (out == NULL) return LIST_IO_ERROR;
 
-    dump_id++;
+    if (mode == GV_ARCS) {
+        dump_id++;
+    }
 
     FILE* log_file = fopen("log.html", "a");
     if (log_file == NULL) {
@@ -468,11 +630,19 @@ list_err_t list_dump_graph(const list_t* list, const char* dot_name, const char*
     }
 
     const char* mode_str = (mode == GV_ORTHO) ? "ORTHO" : "ARCS";
-
-    fprintf(log_file, "<hr>\n");                        // разделительная линия
-    fprintf(log_file, "<h2> DUMP %d</h2>\n", dump_id);  // в будущем добавить макрос на еще откуда он вызван
-    // и еще не 1 2 3 ... дампы а 1.1 1.2 2.1 ...
-    fprintf(log_file, "<p>Size: %d, Capacity: %d</p>\n", list->size, list->capacity);
+    fprintf(log_file, "  <div class=\"meta\"><strong>DUMP #%d.%d</strong> | Mode: <span class=\"meta-func\">%s</span> | File: <span class=\"meta-file\">%s</span></div>\n",
+            dump_id, (mode == GV_ARCS) ? 1 : 2, mode_str, png_name);
+    fprintf(log_file, "  <table class=\"stats-table\">\n");
+    fprintf(log_file,
+            "    <tr>"
+            "<td class=\"var-name\">Size:</td><td class=\"var-val\">%d</td>"
+            "<td class=\"var-name\">Capacity:</td><td class=\"var-val\">%d</td>"
+            "<td class=\"var-name\">Head:</td><td class=\"var-val\">%d</td>"
+            "<td class=\"var-name\">Tail:</td><td class=\"var-val\">%d</td>"
+            "<td class=\"var-name\">Free:</td><td class=\"var-val\">%d</td>"
+            "</tr>\n",
+            list->size, list->capacity, list->next[0], list->prev[0], list->free_addr);
+    fprintf(log_file, "  </table>\n");
 
     // ============================ заголовок =========================
     fprintf(out, "digraph list {\n");
@@ -580,11 +750,17 @@ list_err_t list_dump_graph(const list_t* list, const char* dot_name, const char*
     char cmd[512] = {0};
     snprintf(cmd, sizeof(cmd), "dot -Tpng \"%s\" -o \"%s\"", dot_name, png_name);
     if (system(cmd) != 0) {
-        fprintf(log_file, "<img src=\"%s\" alt=\"List corrypted\"><br>\n", png_name);
+        fprintf(log_file, "  <div style=\"color: #e06c75; font-weight: bold;\">[ERROR] Graphviz generation failed!</div>\n");
+        fprintf(log_file, "</div>\n");  // Закрываем dump-card
         fclose(log_file);
         return LIST_CORRYPTED;
     }
-    fprintf(log_file, "<img src=\"%s\" alt=\"List State\"><br>\n", png_name);
+
+    fprintf(log_file, "  <div class=\"graph-container\">\n");
+    fprintf(log_file, "    <img src=\"%s\" alt=\"List State\">\n", png_name);
+    fprintf(log_file, "  </div>\n");
+    fprintf(log_file, "</div>\n");  // Закрываем dump-card
+
     fclose(log_file);
     return LIST_OK;
 }

@@ -12,14 +12,14 @@ SRCS := $(wildcard src/*.c)
 OBJS := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
 
 ifeq ($(OS), Windows_NT)
-	TARGET := $(addprefix $(BINPRO_DIR)/, list_test.exe)
+	TARGET := $(addprefix $(BINPRO_DIR)/, list.exe)
     RUN    := .\$(TARGET)
 
 	CLEAN_OBJS := 
 
     RM     := del /Q /F
 else
-	TARGET := $(addprefix $(OBJ_DIR)/, list_test)
+	TARGET := $(addprefix $(OBJ_DIR)/, list)
     RUN    := ./$(TARGET)
     RM     := rm -f
 endif

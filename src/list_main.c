@@ -1,12 +1,13 @@
 #include "list.h"
 
 //============================= Проверка списка на валидность ============================
-#define LIST_CHECK(expr)                                                      \
-    do {                                                                      \
-        list_err_t _e = (expr);                                               \
-        if (_e != LIST_OK) {                                                  \
-            printf("%s:%d: %s -> error %d\n", __FILE__, __LINE__, #expr, _e); \
-        }                                                                     \
+#define LIST_CHECK(expr)                                                \
+    do {                                                                \
+        list_err_t _e = (expr);                                         \
+        if (_e != LIST_OK) {                                            \
+            fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #expr);  \
+            list_perror("  reason", _e);                                \
+        }                                                               \
     } while (0)
 //========================================================================================
 
@@ -14,7 +15,7 @@ int main() {
     log_init();
 
     list_t list;
-    LIST_CHECK(list_ctor(&list, 27));
+    LIST_CHECK(LIST_CTOR(list, 27));
     LIST_CHECK(list_verify(&list));
 
     list_iter_t a, b, c, d;
@@ -50,8 +51,11 @@ int main() {
 
     // ---- ломают список ----
     //list.prev[3] = 7;    // prev у 15 указывает не на 40 а на 7
-    //list.next[6] = 4;  // next у 40 указывает на голову и элементы теряются из порядка
+    list.next[6] = 4;  // next у 40 указывает на голову и элементы теряются из порядка
     //list.prev[2] = -1;  // занятая ячейка 2 помечена как свободная ну и дополнительно в свободных написано POISON а тут будет 20.00000
+
+    // ---- для проверки дампа с ошибкой внутри функции списка ----
+    LIST_CHECK(list_elem_pop(&list, 20));
 
     list_dump(&list, list_dumps);  // order: 5(4) 15(3) 20(2) 99(1)
     list_dump_graph_both(&list, "dump3");

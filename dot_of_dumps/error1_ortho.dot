@@ -8,7 +8,7 @@ digraph list {
   cell3 [fillcolor="#2F5D8A", color="#6CA6E0", label="idx: 3\n\n15\nnxt: 1\nprv: 6"];
   cell4 [fillcolor="#2F5D8A", color="#6CA6E0", label="idx: 4 [HEAD]\n\n5\nnxt: 6\nprv: 0"];
   cell5 [fillcolor="#2F5D8A", color="#6CA6E0", label="idx: 5\n\n30\nnxt: 7\nprv: 2"];
-  cell6 [fillcolor="#2F5D8A", color="#6CA6E0", label="idx: 6\n\n40\nnxt: 3\nprv: 4"];
+  cell6 [fillcolor="#2F5D8A", color="#6CA6E0", label="idx: 6\n\n40\nnxt: 4\nprv: 4"];
   cell7 [fillcolor="#2F5D8A", color="#6CA6E0", label="idx: 7\n\n50\nnxt: 8\nprv: 5"];
   cell8 [fillcolor="#2F5D8A", color="#6CA6E0", label="idx: 8\n\n60\nnxt: 9\nprv: 7"];
   cell9 [fillcolor="#2F5D8A", color="#6CA6E0", label="idx: 9\n\n70\nnxt: 21\nprv: 8"];
@@ -69,12 +69,14 @@ digraph list {
   cell2 -> cell5 [style=invis];
   cell3 -> cell1 [color="#187a06", dir=both];
   cell3 -> cell1 [style=invis];
+  cell3 -> cell6 [color="#F85149", penwidth=4];
+  cell3 -> cell6 [style=invis];
   cell4 -> cell6 [color="#187a06", dir=both];
   cell4 -> cell6 [style=invis];
   cell5 -> cell7 [color="#187a06", dir=both];
   cell5 -> cell7 [style=invis];
-  cell6 -> cell3 [color="#187a06", dir=both];
-  cell6 -> cell3 [style=invis];
+  cell6 -> cell4 [color="#F85149", penwidth=4];
+  cell6 -> cell4 [style=invis];
   cell7 -> cell8 [color="#187a06", dir=both];
   cell8 -> cell9 [color="#187a06", dir=both];
   cell9 -> cell21 [color="#187a06", dir=both];
