@@ -310,7 +310,7 @@ dot -Tpng graph.dot -o graph.png
 
 </details>
 
-</details>
+### `list.h / .c`
 
 <details>
 <summary>Подробнее про list_main</summary>
