@@ -310,6 +310,8 @@ dot -Tpng graph.dot -o graph.png
 
 </details>
 
+</details>
+
 <details>
 <summary>Подробнее про list_main</summary>
 
